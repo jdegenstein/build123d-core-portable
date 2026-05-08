@@ -1,0 +1,152 @@
+name: build
+
+on: 
+  workflow_dispatch:
+  push:
+      tags:
+        - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+        python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            platform_slug: linux-x86_64
+            archive_ext: tar.gz
+            START_SCRIPT: Start_Filewatcher.sh
+            PYTHON_BIN: ./pyinst/cpython-3.12.12-linux-x86_64-gnu/bin/python3
+            DEL_PYTHON_LINK_DIR: ./pyinst/cpython-3.12-linux-x86_64-gnu
+            PYTHON_REAL_DIR: ./pyinst/cpython-3.12.12-linux-x86_64-gnu
+            
+          - os: macos-14
+            platform_slug: macos-arm64
+            archive_ext: zip
+            START_SCRIPT: Start_Filewatcher.sh
+            DEL_PYTHON_LINK_DIR: ./pyinst/cpython-3.12-macos-aarch64-none
+            PYTHON_REAL_DIR: ./pyinst/cpython-3.12.12-macos-aarch64-none
+
+          - os: windows-latest
+            platform_slug: windows-x86_64
+            archive_ext: zip
+            START_SCRIPT: Start_Filewatcher.cmd
+            DEL_PYTHON_LINK_DIR: ./pyinst/cpython-3.12-windows-x86_64-none
+            PYTHON_REAL_DIR: ./pyinst/cpython-3.12.12-windows-x86_64-none
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup/
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - uses: actions/setup-go@v6
+        if: runner.os == 'Linux'
+        with:
+          go-version: '1.25'
+
+      - name: Build Linux Launcher with Golang
+        if: runner.os == 'Linux'
+        run: |
+          cd scripts
+          CGO_ENABLED=0 go build -ldflags "-s -w" -o ../Start_Filewatcher launcher.go
+          cd ..
+          chmod +x Start_Filewatcher
+
+      - name: linux/mac install python libs
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          export PATH="${GITHUB_WORKSPACE}/uv:$PATH"
+          unlink ${{ matrix.DEL_PYTHON_LINK_DIR }}
+          rm -f ${{ matrix.PYTHON_REAL_DIR }}/lib/python3.12/EXTERNALLY-MANAGED
+          uv pip install build123d ocp_vscode git+https://github.com/jdegenstein/filewatcher123d --python ${{ matrix.PYTHON_REAL_DIR }}
+
+      - name: windows install python libs
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          export PATH="${GITHUB_WORKSPACE}/uv:$PATH"
+          unlink ${{ matrix.DEL_PYTHON_LINK_DIR }}
+          rm ${{ matrix.PYTHON_REAL_DIR }}/Lib/EXTERNALLY-MANAGED
+          uv pip install build123d ocp_vscode git+https://github.com/jdegenstein/filewatcher123d --python ${{ matrix.PYTHON_REAL_DIR }}
+
+      - name: Copy Start Scripts
+        shell: bash
+        run: |
+          cp scripts/${{ matrix.START_SCRIPT }} ./
+          if [ "$RUNNER_OS" != "Windows" ]; then
+            chmod +x ${{ matrix.START_SCRIPT }}
+          fi
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            cp scripts/macos-unquarantine.sh ./
+            chmod +x macos-unquarantine.sh
+          fi
+
+      - name: Generate Version Report
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          PYTHON_BIN="${{ matrix.PYTHON_BIN }}"
+          PY_RAW=$($PYTHON_BIN --version)
+          PY_VER=${PY_RAW#Python }
+          B123_VER=$($PYTHON_BIN -m pip show build123d | grep "^Version:" | cut -d ' ' -f 2 || echo "Unknown")
+          FW_VER=$($PYTHON_BIN -m pip show filewatcher123d | grep "^Version:" | cut -d ' ' -f 2 || echo "Unknown")
+          OCP_VER=$($PYTHON_BIN -m pip show ocp_vscode | grep "^Version:" | cut -d ' ' -f 2 || echo "Unknown")
+
+          read -r -d '' RELEASE_NOTE_BLOCK << EOM || true
+          - Standalone Python $PY_VER
+          - build123d v$B123_VER
+          - filewatcher123d v$FW_VER
+          - ocp_vscode v$OCP_VER
+          EOM
+
+          echo "### Component Versions" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$RELEASE_NOTE_BLOCK" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: build123d-core-portable-${{ matrix.os }}
+          include-hidden-files: true
+          path: |
+            pyinst/
+            python/
+            uv/
+            ${{ matrix.START_SCRIPT }}
+            *.sh
+            Start_Filewatcher
+
+      - name: Create Release Archive
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          ASSET_NAME="build123d-core-portable_${{ github.ref_name }}-${{ matrix.platform_slug }}.${{ matrix.archive_ext }}"
+          echo "RELEASE_ASSET_FILE=$ASSET_NAME" >> $GITHUB_ENV
+          FILES_TO_PACK="uv pyinst python Start_Filewatcher*"
+
+          if [ "${{ matrix.archive_ext }}" == "tar.gz" ]; then
+            tar -czf "$ASSET_NAME" $FILES_TO_PACK
+          else
+            if [ "$RUNNER_OS" == "Windows" ]; then
+              7z a -tzip "$ASSET_NAME" $FILES_TO_PACK
+            else
+              FILES_TO_PACK="${FILES_TO_PACK} macos-unquarantine.sh"
+              zip -r -q "$ASSET_NAME" $FILES_TO_PACK
+            fi
+          fi
+
+      - name: Upload Binary to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.RELEASE_ASSET_FILE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
