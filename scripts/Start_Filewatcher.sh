@@ -59,4 +59,5 @@ elif [ "$OS" = "Linux" ]; then
     xdg-open "http://127.0.0.1:3939/viewer" &> /dev/null
 fi
 
-fw123d -a "$FILE_TO_WATCH"
+# Call the python module directly to bypass broken shebangs
+"$PYTHON_BIN" -m filewatcher123d.cli -a "$FILE_TO_WATCH"
