@@ -17,6 +17,7 @@ func main() {
 
 	cmd := exec.Command(scriptPath)
 	cmd.Args = append(cmd.Args, os.Args[1:]...)
+	cmd.Stdin = os.Stdin   // For Jupyter REPL to receive keystrokes
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
