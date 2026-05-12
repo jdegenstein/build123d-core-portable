@@ -1,10 +1,27 @@
 #!/bin/bash
 
-# 1. Get the directory where this script is located
+# 1. Terminal Auto-Spawn for GUI Double-Clicks
+if [ ! -t 0 ]; then
+    OS="$(uname -s)"
+    if [ "$OS" = "Darwin" ]; then
+        # Relaunch inside macOS native Terminal
+        exec open -a Terminal "$0"
+        exit 0
+    else
+        # Relaunch inside Linux terminal emulators
+        if command -v x-terminal-emulator >/dev/null 2>&1; then exec x-terminal-emulator -e "$0" "$@"; exit 0; fi
+        if command -v gnome-terminal >/dev/null 2>&1; then exec gnome-terminal -- "$0" "$@"; exit 0; fi
+        if command -v konsole >/dev/null 2>&1; then exec konsole -e "$0" "$@"; exit 0; fi
+        if command -v xfce4-terminal >/dev/null 2>&1; then exec xfce4-terminal -x "$0" "$@"; exit 0; fi
+        if command -v xterm >/dev/null 2>&1; then exec xterm -e "$0" "$@"; exit 0; fi
+    fi
+fi
+
+# 2. Get the directory where this script is located
 BUNDLE_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 OS="$(uname -s)"
 
-# 2. Define Configuration based on OS
+# 3. Define Configuration based on OS
 if [ "$OS" = "Darwin" ]; then
     PYTHON_BIN="$BUNDLE_ROOT/pyinst/cpython-3.12.12-macos-aarch64-none/bin/python3"
 elif [ "$OS" = "Linux" ]; then
@@ -19,14 +36,16 @@ if [ ! -f "$PYTHON_BIN" ]; then
     if [ "$OS" = "Darwin" ]; then
         echo "Note: please run macos-unquarantine.sh first"
     fi
+    # Pause before exiting so the user can actually read the error in the newly spawned terminal
+    read -p "Press Enter to exit..." 
     exit 1
 fi
 
-# 3. Prepend Portable Python to PATH
+# 4. Prepend Portable Python to PATH
 PORTABLE_PYTHON_DIR="$(dirname "$PYTHON_BIN")"
 export PATH="$PORTABLE_PYTHON_DIR:$PATH"
 
-# 4. Guided User Experience
+# 5. Guided User Experience
 if [ -z "$1" ]; then
     echo "========================================"
     echo "       build123d-core-portable          "
@@ -51,7 +70,7 @@ else
     FILE_TO_WATCH="$1"
 fi
 
-# 5. Open browser and start filewatcher123d
+# 6. Open browser and start filewatcher123d
 echo "Opening viewer at http://127.0.0.1:3939/viewer"
 if [ "$OS" = "Darwin" ]; then
     open "http://127.0.0.1:3939/viewer"
