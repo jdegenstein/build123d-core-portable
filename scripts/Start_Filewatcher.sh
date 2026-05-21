@@ -22,14 +22,7 @@ BUNDLE_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 OS="$(uname -s)"
 
 # 3. Define Configuration based on OS
-if [ "$OS" = "Darwin" ]; then
-    PYTHON_BIN="$BUNDLE_ROOT/pyinst/cpython-3.12.12-macos-aarch64-none/bin/python3"
-elif [ "$OS" = "Linux" ]; then
-    PYTHON_BIN="$BUNDLE_ROOT/pyinst/cpython-3.12.12-linux-x86_64-gnu/bin/python3"
-else
-    echo "Unsupported Operating System: $OS"
-    exit 1
-fi
+PYTHON_BIN="$BUNDLE_ROOT/py/bin/python3"
 
 if [ ! -f "$PYTHON_BIN" ]; then
     echo "ERROR: Python not found at: $PYTHON_BIN"

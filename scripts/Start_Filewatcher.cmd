@@ -1,11 +1,12 @@
 @echo off
 setlocal enabledelayedexpansion
 
+
 REM 1. CALCULATE PATHS
 set "BUNDLE_ROOT=%~dp0"
-set "PORTABLE_PYTHON_BIN=%BUNDLE_ROOT%pyinst\cpython-3.12.12-windows-x86_64-none\python.exe"
-set "PORTABLE_PYTHON_DIR=%BUNDLE_ROOT%pyinst\cpython-3.12.12-windows-x86_64-none"
-set "PORTABLE_SCRIPTS_DIR=%BUNDLE_ROOT%pyinst\cpython-3.12.12-windows-x86_64-none\Scripts"
+set "PORTABLE_PYTHON_BIN=%BUNDLE_ROOT%py\python.exe"
+set "PORTABLE_PYTHON_DIR=%BUNDLE_ROOT%py"
+set "PORTABLE_SCRIPTS_DIR=%BUNDLE_ROOT%py\Scripts"
 
 REM 2. PREPARE ENVIRONMENT
 set "PATH=%PORTABLE_PYTHON_DIR%;%PORTABLE_SCRIPTS_DIR%;%PATH%"
